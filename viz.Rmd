@@ -8,26 +8,16 @@ output: github_document
 ```{r setup}
 library(tidyverse)
 library(ggridges)
+library(patchwork)
+library(readxl)
 ```
 
 ## Load the weather data
 rnoaa allows you to access to dataset online that is aggregated
 ```{r}
-weather_df = 
-  rnoaa::meteo_pull_monitors(
-    c("USW00094728", "USW00022534", "USS0023B17S"),
-    var = c("PRCP", "TMIN", "TMAX"), 
-    date_min = "2021-01-01",
-    date_max = "2022-12-31") |>
-  mutate(
-    name = case_match(
-      id, 
-      "USW00094728" ~ "CentralPark_NY", 
-      "USW00022534" ~ "Molokai_HI",
-      "USS0023B17S" ~ "Waterhole_WA"),
-    tmin = tmin / 10,
-    tmax = tmax / 10) |>
-  select(name, id, everything())
+weather_df <- 
+  read_csv("weather_df.csv", na = c("NA", "", ".")) |>   # Read the unzipped CSV file
+  janitor::clean_names()                      
 ```
 
 # Scatter plots
@@ -208,9 +198,183 @@ ggsave("plots/ggp_weather.pdf", ggp_weather, width = 8, height = 6)
 
 embedding plots
 ```{r fig.width=6, fig.asp = .6}
-ggp_weather = 
+weather_df |>
+  ggplot(aes(x = tmin, y = tmax)) +
+  geom_point(aes(color = name), alpha = .5)
+```
+
+```{r}
+weather_df |>
+  ggplot(aes(x = tmin, y = tmax, color = name)) +
+  geom_point(alpha = .3) + 
+  labs(
+    title = "temperature scatterplot",
+    x = "Minimum Temp (C)",
+    y = "Maximum Temp (C)",
+    color = "location",
+    caption = "Weather data taken from rnoaa package for these three stations"
+  ) +
+  scale_x_continuous(
+    breaks = c(-15, 0, 20),
+    labels = c("-15C","0","20")
+  ) +
+  scale_y_continuous(
+    limits = c(0,30),
+    transform = "sqrt",
+    position = "right"
+  )
+```
+
+```{r}
+ggp_scatterplot = 
+weather_df |>
+  ggplot(aes(x = tmin, y = tmax, color = name)) +
+  geom_point(alpha = .3) + 
+  labs(
+    title = "temperature scatterplot",
+    x = "Minimum Temp (C)",
+    y = "Maximum Temp (C)",
+    color = "location",
+    caption = "Weather data taken from rnoaa package for these three stations"
+  ) + 
+  viridis::scale_color_viridis(name = "Location", discrete = TRUE)
+```
+
+```{r}
+ggp_scatterplot +
+  theme_bw() +
+  theme(legend.position = "bottom")
+```
+
+```{r}
+ggp_scatterplot +
+  theme(legend.position = "bottom") + 
+  theme_minimal()
+```
+
+```{r}
+ggp_scatterplot +
+  theme(legend.position = "bottom") + 
+  theme_classic()
+```
+
+```{r}
+ggp_scatterplot +
+  theme(legend.position = "bottom") +
+  ggthemes::theme_excel()
+```
+
+```{r}
+weather_df |>
+  ggplot(aes(x = date, y = tmax, color = name, size = prcp)) +
+  geom_point(alpha = .3) +
+  geom_smooth(se = FALSE) +
+  viridis::scale_color_viridis(discrete = TRUE) +
+  labs(
+    x = "Date",
+    y = "Maximum Temp (C)",
+    title = "Seasonal variation in Max Temps"
+  ) + 
+  theme_minimal() +
+  theme(legend.position = "bottom")
+```
+
+Use different datasets in different 'geom's
+
+```{r}
+central_park_df = 
+  weather_df |> 
+  filter(name == "CentralPark_NY")
+
+molokai_df = 
+  weather_df |> 
+  filter(name == "Molokai_HI")
+
+ggplot(data = molokai_df, aes(x = date, y = tmax, color = name)) + 
+  geom_point() + 
+  geom_line(data = central_park_df) 
+```
+
+## Multiple panels
+```{r}
+weather_df |>
+  ggplot(aes(x = tmin, fill = name)) +
+  geom_density() + 
+  facet_grid(. ~ name)
+```
+
+```{r}
+ggp_tmax_tmin =
+  weather_df |>
+  ggplot(aes(x = tmin, y = tmax, color = name)) +
+  geom_point(alpha = .3)
+  
+ggp_tmax_density =
+  weather_df |>
+  ggplot(aes(x = tmax, fill = name)) +
+  geom_density(alpha = .3)
+
+ggp_tmax_date =
   weather_df |>
   ggplot(aes(x = date, y = tmax, color = name)) +
-  geom_point()
+  geom_point() + 
+  geom_smooth(se = FALSE)
+
+(ggp_tmax_tmin+ggp_tmax_density)/ggp_tmax_date
+```
+
+## Data manipulation
+
+```{r}
+weather_df |>
+  mutate(name = fct_relevel(name, c("Molokai_HI", "CentralPark_NY", "Waterhole_WA"))) |>
+  ggplot(aes(x = name, y = tmax, fill = name)) +
+  geom_violin(alpha = .5)
+```
+
+```{r}
+pulse_df = 
+  haven::read_sas("data/public_pulse_data.sas7bdat") |>
+  janitor::clean_names() |>
+  pivot_longer(
+    cols = bdi_score_bl:bdi_score_12m,
+    names_to = "visit", 
+    names_prefix = "bdi_score_",
+    values_to = "bdi_score")
+
+pulse_df |>
+  ggplot(aes(x = visit, y = bdi_score)) +
+  geom_boxplot()
+```
+
+```{r}
+pup_data = 
+  read_csv("./data/FAS_pups.csv", na = c("NA", ".", "")) |>
+  janitor::clean_names() |>
+  mutate(
+    sex = 
+      case_match(
+        sex, 
+        1 ~ "male", 
+        2 ~ "female"))
+
+litter_data = 
+  read_csv("./data/FAS_litters.csv", na = c("NA", ".", "")) |>
+  janitor::clean_names() |>
+  separate(group, into = c("dose", "day_of_tx"), sep = 3)
+
+fas_data = left_join(pup_data, litter_data, by = "litter_number") 
+
+fas_data |> 
+  select(sex, dose, day_of_tx, pd_ears:pd_walk) |> 
+  pivot_longer(
+    pd_ears:pd_walk,
+    names_to = "outcome", 
+    values_to = "pn_day") |> 
+  drop_na() |> 
+  mutate(outcome = forcats::fct_reorder(outcome, pn_day, median)) |> 
+  ggplot(aes(x = dose, y = pn_day)) + 
+  geom_violin() + 
+  facet_grid(day_of_tx ~ outcome)
 ```
 
