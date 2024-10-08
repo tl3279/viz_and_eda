@@ -1,0 +1,23 @@
+---
+title: "EDA"
+author: "Tianqi Li"
+date: "2024-10-08"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(ggridges)
+library(patchwork)
+library(readxl)
+```
+
+```{r}
+```{r}
+weather_df <- 
+  read_csv("weather_df.csv", na = c("NA", "", ".")) |>   # Read the unzipped CSV file
+  janitor::clean_names() |>
+  mutate(month = floor_date(date, unit = "month"))
+```
+```
+
